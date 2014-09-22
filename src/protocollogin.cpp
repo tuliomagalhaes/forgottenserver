@@ -44,18 +44,8 @@ void ProtocolLogin::disconnectClient(const std::string& message, uint16_t versio
 	disconnect();
 }
 
-void ProtocolLogin::getCharacterList(const std::string& accountName, const std::string& password, uint16_t version)
+void ProtocolLogin::addWorldInfo(OutputMessage_ptr& output, const std::string& accountName, const std::string& password, uint16_t version, bool isLiveCastLogin /*=false*/)
 {
-	Account account;
-	if (!IOLoginData::loginserverAuthentication(accountName, password, account)) {
-		disconnectClient("Account name or password is not correct.", version);
-		return;
-	}
-
-	auto output = OutputMessagePool::getOutputMessage();
-	//Update premium days
-	Game::updatePremium(account);
-
 	const std::string& motd = g_config.getString(ConfigManager::MOTD);
 	if (!motd.empty()) {
 		//Add MOTD
@@ -78,11 +68,53 @@ void ProtocolLogin::getCharacterList(const std::string& accountName, const std::
 	output->addByte(0); // world id
 	output->addString(g_config.getString(ConfigManager::SERVER_NAME));
 	output->addString(g_config.getString(ConfigManager::IP));
-	output->add<uint16_t>(g_config.getNumber(ConfigManager::GAME_PORT));
+
+	if (isLiveCastLogin) {
+		output->add<uint16_t>(g_config.getNumber(ConfigManager::LIVE_CAST_PORT));
+	} else {
+		output->add<uint16_t>(g_config.getNumber(ConfigManager::GAME_PORT));
+	}
 	output->addByte(0);
+}
+
+void ProtocolLogin::getCastingStreamsList(const std::string& password, uint16_t version)
+{
+	//dispatcher thread
+	OutputMessage_ptr output = OutputMessagePool::getInstance()->getOutputMessage(this, false);
+	if (output) {
+		addWorldInfo(output, "", password, version, true);
+
+		const auto& casts = ProtocolGame::getLiveCasts();
+		uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), casts.size());
+		output->addByte(size);
+		for (uint8_t i = 0; i < size; i++) {
+			output->addByte(0);
+			output->addString(casts[i].first->getName());
+		}
+		output->add<uint16_t>(0x0); //The client expects the number of premium days left.
+		OutputMessagePool::getInstance()->send(output);
+	}
+	getConnection()->close();
+}
+
+void ProtocolLogin::getCharacterList(const std::string& accountName, const std::string& password, uint16_t version)
+{
+	//dispatcher thread
+	Account account;
+	if (!IOLoginData::loginserverAuthentication(accountName, password, account)) {
+		disconnectClient("Account name or password is not correct.", version);
+		return;
+	}
+
+	auto output = OutputMessagePool::getOutputMessage();	
+	//Update premium days
+	Game::updatePremium(account);
+
+	addWorldInfo(output);
 
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), account.characters.size());
 	output->addByte(size);
+	output->addByte(static_cast<uint8_t>(account.characters.size()));
 	for (uint8_t i = 0; i < size; i++) {
 		output->addByte(0);
 		output->addString(account.characters[i]);
@@ -91,6 +123,13 @@ void ProtocolLogin::getCharacterList(const std::string& accountName, const std::
 	//Add premium days
 	if (g_config.getBoolean(ConfigManager::FREE_PREMIUM)) {
 		output->add<uint16_t>(0xFFFF); //client displays free premium
+	} else {
+		output->add<uint16_t>(account.premiumDays);
+	}
+
+	//Add premium days
+	if (g_config.getBoolean(ConfigManager::FREE_PREMIUM)) {
+		output->add<uint16_t>(0xFFFF);    //client displays free premium
 	} else {
 		output->add<uint16_t>(account.premiumDays);
 	}
@@ -173,12 +212,17 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	}
 
 	std::string accountName = msg.getString();
+	std::string password = msg.getString();
+	auto thisPtr = std::dynamic_pointer_cast<ProtocolLogin>(shared_from_this());
 	if (accountName.empty()) {
-		disconnectClient("Invalid account name.", version);
+		if (g_config.getBoolean(ConfigManager::ENABLE_LIVE_CASTING)) {
+			g_dispatcher.addTask(createTask(std::bind(&ProtocolLogin::getCastingStreamsList, thisPtr, password, version)));
+		} else {
+			disconnectClient("Invalid account name.", version);
+		}
 		return;
 	}
 
 	std::string password = msg.getString();
-	auto thisPtr = std::dynamic_pointer_cast<ProtocolLogin>(shared_from_this());
 	g_dispatcher.addTask(createTask(std::bind(&ProtocolLogin::getCharacterList, thisPtr, accountName, password, version)));
 }

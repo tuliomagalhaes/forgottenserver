@@ -1139,6 +1139,21 @@ class Player final : public Creature, public Cylinder
 		void forgetInstantSpell(const std::string& spellName);
 		bool hasLearnedInstantSpell(const std::string& spellName) const;
 
+		bool startLiveCast(const std::string& password) {
+			return client != nullptr && client->startLiveCast(password);
+		}
+
+		bool stopLiveCast() {
+			return client != nullptr && client->stopLiveCast();
+		}
+
+		bool isLiveCaster() const {
+			return client != nullptr && client->isLiveCaster();
+		}
+
+		const std::map<uint8_t, OpenContainer>& getOpenContainers() const {
+			return openContainers;
+		}
 	protected:
 		std::forward_list<Condition*> getMuteConditions() const;
 

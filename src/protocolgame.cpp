@@ -35,11 +35,14 @@
 #include "waitlist.h"
 #include "ban.h"
 #include "scheduler.h"
+#include "databasetasks.h"
 
 extern ConfigManager g_config;
 extern Actions actions;
 extern CreatureEvents* g_creatureEvents;
 extern Chat* g_chat;
+
+ProtocolGame::LiveCastsMap ProtocolGame::m_liveCasts;
 
 ProtocolGame::ProtocolGame(Connection_ptr connection) :
 	Protocol(connection),
@@ -49,7 +52,8 @@ ProtocolGame::ProtocolGame(Connection_ptr connection) :
 	version(CLIENT_VERSION_MIN),
 	m_challengeRandom(0),
 	m_debugAssertSent(false),
-	m_acceptPackets(false)
+	m_acceptPackets(false),
+	m_isLiveCaster(false)
 {
 	//
 }
@@ -57,6 +61,7 @@ ProtocolGame::ProtocolGame(Connection_ptr connection) :
 void ProtocolGame::release()
 {
 	//dispatcher thread
+	stopLiveCast();
 	if (player && player->client == shared_from_this()) {
 		player->client.reset();
 		player->decrementReferenceCounter();
@@ -242,9 +247,107 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 		}
 	}
 
+	stopLiveCast();
 	disconnect();
 
 	g_game.removeCreature(player);
+}
+
+bool ProtocolGame::startLiveCast(const std::string& password /*= ""*/)
+{
+	if (!g_config.getBoolean(ConfigManager::ENABLE_LIVE_CASTING) || m_isLiveCaster || !player || player->isRemoved() || !getConnection()) {
+		return false;
+	}
+
+	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
+
+	//Send a "dummy" channel
+	sendChannel(CHANNEL_CAST, LIVE_CAST_CHAT_NAME, nullptr, nullptr);
+	m_liveCastName = player->getName();
+	m_liveCastPassword = password;
+	m_spectators.clear();
+	m_isLiveCaster = true;
+	registerLiveCast();
+
+	return true;
+}
+
+bool ProtocolGame::stopLiveCast()
+{
+	if (!m_isLiveCaster || !player) {
+		return false;
+	}
+
+	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
+
+	for (auto& spectator : m_spectators) {
+		spectator->disconnectClient("Live cast has been stopped. Relogin to refresh the cast list.");
+		spectator->unRef();
+	}
+
+	m_spectators.clear();
+	m_isLiveCaster = false;
+	unregisterLiveCast();
+
+	return true;
+}
+
+void ProtocolGame::clearLiveCastInfo()
+{
+	static std::once_flag flag;
+	std::call_once(flag, []() {
+			assert(g_game.getGameState() == GAME_STATE_INIT);
+			std::ostringstream query;
+			query << "DELETE FROM `live_casts`;";
+			g_databaseTasks.addTask(query.str());
+		});
+}
+
+void ProtocolGame::registerLiveCast()
+{
+	std::ostringstream query;
+	query << "INSERT into `live_casts` (`player_id`, `cast_name`, `password`) VALUES (" << player->getGUID() << ", '"
+		<< getLiveCastName() << "', " << isPasswordProtected() << ");";
+	g_databaseTasks.addTask(query.str());
+	m_liveCasts.insert(std::make_pair(player, this));
+}
+
+void ProtocolGame::unregisterLiveCast()
+{
+	std::ostringstream query;
+	query << "DELETE FROM `live_casts` WHERE `player_id`=" << player->getGUID() << ";";
+	g_databaseTasks.addTask(query.str());
+	m_liveCasts.erase(player);
+}
+
+void ProtocolGame::updateLiveCastInfo()
+{
+	std::ostringstream query;
+	query << "UPDATE `live_casts` SET `cast_name`='" << getLiveCastName() << "', `password`="
+		<< isPasswordProtected() << ", `spectators`=" << getSpectatorCount()
+		<< " WHERE `player_id`=" << player->getGUID() << ";";
+	g_databaseTasks.addTask(query.str());
+}
+
+void ProtocolGame::addSpectator(ProtocolGame* spectatorClient)
+{
+	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
+
+	m_spectators.push_back(spectatorClient);
+	spectatorClient->addRef();
+	updateLiveCastInfo();
+}
+
+void ProtocolGame::removeSpectator(ProtocolGame* spectatorClient)
+{
+	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
+
+	auto it = std::find(m_spectators.begin(), m_spectators.end(), spectatorClient);
+	if (it != m_spectators.end()) {
+		m_spectators.erase(it);
+		spectatorClient->unRef();
+	}
+	updateLiveCastInfo();
 }
 
 void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
@@ -385,6 +488,8 @@ void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 	out->append(msg);
 }
 
+
+
 void ProtocolGame::parsePacket(NetworkMessage& msg)
 {
 	if (!m_acceptPackets || g_game.getGameState() == GAME_STATE_SHUTDOWN || msg.getLength() <= 0) {
@@ -401,7 +506,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		return;
 	}
 
-	//a dead player can not performs actions
+	//a dead player can not perform actions
 	if (player->isRemoved() || player->getHealth() <= 0) {
 		if (recvbyte == 0x0F) {
 			disconnect();
@@ -873,7 +978,11 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 		return;
 	}
 
-	addGameTask(&Game::playerSay, player->getID(), channelId, type, receiver, text);
+	if (channelId == CHANNEL_CAST) {
+		g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::sendChannelMessage, this, player->getName(), text, TALKTYPE_CHANNEL_R1, channelId)));
+	} else {
+		addGameTask(&Game::playerSay, player->getID(), channelId, type, receiver, text);
+	}
 }
 
 void ProtocolGame::parseFightModes(NetworkMessage& msg)
@@ -2193,14 +2302,14 @@ void ProtocolGame::sendPing()
 {
 	NetworkMessage msg;
 	msg.addByte(0x1D);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg, false);
 }
 
 void ProtocolGame::sendPingBack()
 {
 	NetworkMessage msg;
 	msg.addByte(0x1E);
-	writeToOutputBuffer(msg);
+	writeToOutputBuffer(msg, false);
 }
 
 void ProtocolGame::sendDistanceShoot(const Position& from, const Position& to, uint8_t type)

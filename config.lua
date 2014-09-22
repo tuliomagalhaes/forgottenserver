@@ -68,8 +68,11 @@ allowChangeOutfit = true
 freePremium = false
 kickIdlePlayerAfterMinutes = 15
 maxMessageBuffer = 4
+
 emoteSpells = false
 classicEquipmentSlots = false
+enableLiveCasting = true
+liveCastPort = 7173
 
 -- Rates
 -- NOTE: rateExp is not used if you have enabled stages in data/XML/stages.xml

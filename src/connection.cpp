@@ -23,6 +23,7 @@
 #include "connection.h"
 #include "outputmessage.h"
 #include "protocol.h"
+#include "protocolgame.h"
 #include "scheduler.h"
 #include "server.h"
 
