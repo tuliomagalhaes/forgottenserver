@@ -75,6 +75,7 @@ class OutputMessage : public NetworkMessage
 			//added header size to the message size
 			length += sizeof(T);
 		}
+
 		MsgSize_t outputBufferStart;
 };
 

@@ -111,29 +111,26 @@ class ProtocolGame : public Protocol
 		 *  \returns const reference to the spectator vector
 		 */
 		const CastSpectatorVec& getLiveCastSpectators() const {
-			return m_spectators;
+			return spectators;
 		}
 
 		/** \brief Provides information about spectator count.
 		 */
 		size_t getSpectatorCount() const {
-			return m_spectators.size();
+			return spectators.size();
 		}
 
 		bool isLiveCaster() const {
-			return m_isLiveCaster;
+			return isCaster;
 		}
 
 		std::mutex liveCastLock;
 
 		/** \brief Adds a new live cast to the list of available casts
-		 *  \param player pointer to the casting \ref Player object
-		 *  \param client pointer to the caster's \ref ProtocolGame object
 		 */
 		void registerLiveCast();
 
 		/** \brief Removes a live cast from the list of available casts
-		 *  \param player pointer to the casting \ref Player object
 		 */
 		void unregisterLiveCast();
 
@@ -153,32 +150,32 @@ class ProtocolGame : public Protocol
 		 *  \returns A pointer to the \ref ProtocolGame of the caster
 		 */
 		static ProtocolGame* getLiveCast(Player* player) {
-			const auto it = m_liveCasts.find(player);
-			return it != m_liveCasts.end() ? it->second : nullptr;
+			const auto it = liveCasts.find(player);
+			return it != liveCasts.end() ? it->second : nullptr;
 		}
 
 		/** \brief Gets the live cast name/login
 		 *  \returns A const reference to a string containing the live cast name/login
 		 */
 		const std::string& getLiveCastName() const {
-			return m_liveCastName;
+			return liveCastName;
 		}
 		/** \brief Gets the live cast password
 		 *  \returns A const reference to a string containing the live cast password
 		 */
 		const std::string& getLiveCastPassword() const {
-			return m_liveCastPassword;
+			return liveCastPassword;
 		}
 		/** \brief Check if the live cast is password protected
 		 */
 		bool isPasswordProtected() const {
-			return !m_liveCastPassword.empty();
+			return !liveCastPassword.empty();
 		}
 		/** \brief Allows access to the live cast map.
 		 *  \returns A const reference to the live cast map.
 		 */
 		static const LiveCastsMap& getLiveCasts() {
-			return m_liveCasts;
+			return liveCasts;
 		}
 
 		/** \brief Allows spectators to send text messages to the caster
@@ -186,7 +183,12 @@ class ProtocolGame : public Protocol
 		 *  \param text string containing the text message
 		 */
 		void broadcastSpectatorMessage(const std::string& text) {
-			sendChannelMessage("Spectator", text, TALKTYPE_CHANNEL_Y, CHANNEL_CAST);
+			if (getConnection() && player) {
+				sendChannelMessage("Spectator", text, TALKTYPE_CHANNEL_Y, CHANNEL_CAST);
+			}
+		}
+		static uint8_t getMaxLiveCastCount() {
+			return std::numeric_limits<int8_t>::max();
 		}
 
 	private:
@@ -447,17 +449,17 @@ class ProtocolGame : public Protocol
 		bool m_debugAssertSent;
 		bool m_acceptPackets;
 
-		static LiveCastsMap m_liveCasts; ///< Stores all available casts.
+		static LiveCastsMap liveCasts; ///< Stores all available casts.
 
-		bool m_isLiveCaster; ///< Determines if this \ref ProtocolGame object is casting
+		bool isCaster; ///< Determines if this \ref ProtocolGame object is casting
 
 		///< list of spectators \warning This variable should only be accessed after locking \ref liveCastLock
-		CastSpectatorVec m_spectators;
+		CastSpectatorVec spectators;
 
 		///< Live cast name that is also used as login
-		std::string m_liveCastName;
+		std::string liveCastName;
 		///< Password used to access the live cast
-		std::string m_liveCastPassword;
+		std::string liveCastPassword;
 };
 
 #endif

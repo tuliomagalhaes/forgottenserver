@@ -33,6 +33,7 @@
 
 #include "connection.h"
 #include "scheduler.h"
+#include "ban.h"
 
 extern Game g_game;
 extern ConfigManager g_config;
@@ -54,14 +55,17 @@ void ProtocolSpectator::disconnectSpectator(const std::string& message)
 {
 	if (client) {
 		client->removeSpectator(this);
+		if (player) {
+			player->decrementReferenceCounter();
+		}
 		player = nullptr;
 		client = nullptr;
 	}
 
 	OutputMessage_ptr output = OutputMessagePool::getInstance()->getOutputMessage(this, false);
 	if (output) {
-		output->AddByte(0x14);
-		output->AddString(message);
+		output->addByte(0x14);
+		output->addString(message);
 		OutputMessagePool::getInstance()->send(output);
 	}
 	disconnect();
@@ -70,17 +74,17 @@ void ProtocolSpectator::disconnectSpectator(const std::string& message)
 void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 {
 	if (g_game.getGameState() == GAME_STATE_SHUTDOWN) {
-		getConnection()->closeConnection();
+		getConnection()->close();
 		return;
 	}
 
 	operatingSystem = (OperatingSystem_t)msg.get<uint16_t>();
 	version = msg.get<uint16_t>();
 
-	msg.SkipBytes(5); // U32 clientVersion, U8 clientType
+	msg.skipBytes(7); // U32 clientVersion, U8 clientType
 
 	if (!RSA_decrypt(msg)) {
-		getConnection()->closeConnection();
+		getConnection()->close();
 		return;
 	}
 
@@ -94,30 +98,55 @@ void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 
 	if (operatingSystem >= CLIENTOS_OTCLIENT_LINUX) {
 		NetworkMessage opcodeMessage;
-		opcodeMessage.AddByte(0x32);
-		opcodeMessage.AddByte(0x00);
-		opcodeMessage.Add<uint16_t>(0x00);
+		opcodeMessage.addByte(0x32);
+		opcodeMessage.addByte(0x00);
+		opcodeMessage.add<uint16_t>(0x00);
 		writeToOutputBuffer(opcodeMessage);
 	}
 
-	msg.SkipBytes(1); // gamemaster flag
-	std::string accountName = msg.GetString();
-	std::string characterName = msg.GetString();
-	std::string password = msg.GetString();
+	msg.skipBytes(1); // gamemaster flag
+	std::string password = msg.getString();
+	std::string characterName = msg.getString();
+	
 
 	uint32_t timeStamp = msg.get<uint32_t>();
-	uint8_t randNumber = msg.GetByte();
+	uint8_t randNumber = msg.getByte();
 	if (m_challengeTimestamp != timeStamp || m_challengeRandom != randNumber) {
-		getConnection()->closeConnection();
+		getConnection()->close();
 		return;
 	}
-
-	if (version < CLIENT_VERSION_MIN || version > CLIENT_VERSION_MAX) {
+	auto dispatchDisconnectClient = [this](const std::string& msg) {
 		g_dispatcher.addTask(createTask(
-				std::bind(&ProtocolSpectator::disconnectSpectator, this, "Only clients with protocol " CLIENT_VERSION_STR " allowed!")));
+					std::bind(&ProtocolSpectator::disconnectSpectator, this, msg)));
+	};
+	if (version < CLIENT_VERSION_MIN || version > CLIENT_VERSION_MAX) {
+		
+		dispatchDisconnectClient("Only clients with protocol " CLIENT_VERSION_STR " allowed!");
 		return;
 	}
 
+	if (g_game.getGameState() == GAME_STATE_STARTUP) {
+		dispatchDisconnectClient("Gameworld is starting up. Please wait.");
+		return;
+	}
+
+	if (g_game.getGameState() == GAME_STATE_MAINTAIN) {
+		dispatchDisconnectClient("Gameworld is under maintenance. Please re-connect in a while.");
+		return;
+	}
+	
+	BanInfo banInfo;
+	if (IOBan::isIpBanned(getIP(), banInfo)) {
+		if (banInfo.reason.empty()) {
+			banInfo.reason = "(none)";
+		}
+
+		std::ostringstream ss;
+		ss << "Your IP has been banned until " << formatDateShort(banInfo.expiresAt) << " by " << banInfo.bannedBy << ".\n\nReason specified:\n" << banInfo.reason;
+		dispatchDisconnectClient(ss.str());
+		return;
+	}
+	password.erase(password.begin());
 	g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::login, this, characterName, password)));
 }
 
@@ -125,29 +154,62 @@ void ProtocolSpectator::sendEmptyTileOnPlayerPos(const Tile* tile, const Positio
 {
 	NetworkMessage msg;
 
-	msg.AddByte(0x69);
-	msg.AddPosition(playerPos);
+	msg.addByte(0x69);
+	msg.addPosition(playerPos);
 
-	msg.Add<uint16_t>(0x00);
-	msg.AddItem(tile->ground);
+	msg.add<uint16_t>(0x00);
+	msg.addItem(tile->getGround());
 
-	msg.AddByte(0x00);
-	msg.AddByte(0xFF);
+	msg.addByte(0x00);
+	msg.addByte(0xFF);
 	writeToOutputBuffer(msg);
 }
+
+void ProtocolSpectator::addDummyCreature(NetworkMessage& msg, const uint32_t& creatureID, const Position& playerPos)
+{
+	// add dummy creature
+	CreatureType_t creatureType = CREATURETYPE_NPC;
+	if(creatureID <= 0x10000000) {
+		creatureType = CREATURETYPE_PLAYER;
+	} else if(creatureID <= 0x40000000) {
+		creatureType = CREATURETYPE_MONSTER;
+	}
+	msg.addByte(0x6A);
+	msg.addPosition(playerPos);
+	msg.addByte(1); //stackpos
+	msg.add<uint16_t>(0x61); // is not known
+	msg.add<uint32_t>(0); // remove no creature
+	msg.add<uint32_t>(creatureID); // creature id
+	msg.addByte(creatureType); // creature type
+	msg.addString("Dummy");
+	msg.addByte(0x00); // health percent
+	msg.addByte(DIRECTION_NORTH); // direction
+	AddOutfit(msg, player->getCurrentOutfit()); // outfit
+	msg.addByte(0); // light level
+	msg.addByte(0); // light color
+	msg.add<uint16_t>(200); // speed
+	msg.addByte(SKULL_NONE); // skull type
+	msg.addByte(SHIELD_NONE); // party shield
+	msg.addByte(GUILDEMBLEM_NONE); // guild emblem
+	msg.addByte(creatureType); // creature type
+	msg.addByte(SPEECHBUBBLE_NONE); // speechbubble
+	msg.addByte(0xFF); // MARK_UNMARKED
+	msg.add<uint16_t>(0x00); // helpers
+	msg.addByte(0); // walkThrough
+}
+
 void ProtocolSpectator::syncKnownCreatureSets()
 {
 	const auto& casterKnownCreatures = client->getKnownCreatures();
 	const auto playerPos = player->getPosition();
 	const auto tile = player->getTile();
 
-	if (!tile || !tile->ground) {
+	if (!tile || !tile->getGround()) {
 		disconnectSpectator("A sync error has occured.");
 		return;
 	}
 	sendEmptyTileOnPlayerPos(tile, playerPos);
 
-	
 	bool known;
 	uint32_t removedKnown;
 	for (const auto creatureID : casterKnownCreatures) {
@@ -158,49 +220,18 @@ void ProtocolSpectator::syncKnownCreatureSets()
 		NetworkMessage msg;
 		const auto creature = g_game.getCreatureByID(creatureID);
 		if (creature && !creature->isRemoved()) {
-			
-
-			msg.AddByte(0x6A);
-			msg.AddPosition(playerPos);
-			msg.AddByte(1); //stackpos
+			msg.addByte(0x6A);
+			msg.addPosition(playerPos);
+			msg.addByte(1); //stackpos
 			checkCreatureAsKnown(creature->getID(), known, removedKnown);
 			AddCreature(msg, creature, known, removedKnown);
 			RemoveTileThing(msg, playerPos, 1);
 		} else if (operatingSystem <= CLIENTOS_FLASH) { // otclient freeze with huge amount of creature add, but do not debug if there are unknown creatures, best solution for now :(
-			CreatureType_t creatureType = CREATURETYPE_NPC;
-			if(creatureID <= 0x10000000)
-					creatureType = CREATURETYPE_PLAYER;
-			else if(creatureID <= 0x40000000)
-					creatureType = CREATURETYPE_MONSTER;
-
-			// add dummy creature
-			msg.AddByte(0x6A);
-			msg.AddPosition(playerPos);
-			msg.AddByte(1); //stackpos
-			msg.add<uint16_t>(0x61); // is not known
-			msg.add<uint32_t>(0); // remove no creature
-			msg.add<uint32_t>(creatureID); // creature id
-			msg.AddByte(creatureType); // creature type
-			msg.AddString("Dummy");
-			msg.AddByte(0x00); // health percent
-			msg.AddByte(NORTH); // direction
-			AddOutfit(msg, player->getCurrentOutfit()); // outfit
-			msg.AddByte(0); // light level
-			msg.AddByte(0); // light color
-			msg.add<uint16_t>(200); // speed
-			msg.AddByte(SKULL_NONE); // skull type
-			msg.AddByte(SHIELD_NONE); // party shield
-			msg.AddByte(GUILDEMBLEM_NONE); // guild emblem
-			msg.AddByte(creatureType); // creature type
-			msg.AddByte(SPEECHBUBBLE_NONE); // speechbubble
-			msg.AddByte(0xFF); // MARK_UNMARKED
-			msg.add<uint16_t>(0x00); // helpers
-			msg.AddByte(0); // walkThrough
+			addDummyCreature(msg, creatureID, playerPos);
 			RemoveTileThing(msg, playerPos, 1);
-		
+		}
 		writeToOutputBuffer(msg);
 	}
-	
 
 	sendUpdateTile(tile, playerPos);
 }
@@ -227,7 +258,7 @@ void ProtocolSpectator::syncOpenContainers()
 	}
 }
 
-void ProtocolSpectator::login(const std::string& liveCastName, const std::string& liveCastPassword)
+void ProtocolSpectator::login(const std::string& liveCastName, const std::string& password)
 {
 	//dispatcher thread
 	auto _player = g_game.getPlayerByName(liveCastName);
@@ -243,14 +274,15 @@ void ProtocolSpectator::login(const std::string& liveCastName, const std::string
 		return;
 	}
 
-	const auto& password = liveCasterProtocol->getLiveCastPassword();
+	const auto& liveCastPassword = liveCasterProtocol->getLiveCastPassword();
 	if (liveCasterProtocol->isLiveCaster()) {
-		if (password != liveCastPassword) {
+		if (!liveCastPassword.empty() && password != liveCastPassword) {
 			disconnectSpectator("Wrong live cast password.");
 			return;
 		}
 
 		player = _player;
+		player->incrementReferenceCounter();
 		eventConnect = 0;
 		client = liveCasterProtocol;
 		m_acceptPackets = true;
@@ -272,6 +304,9 @@ void ProtocolSpectator::logout()
 	if (client) {
 		client->removeSpectator(this);
 		client = nullptr;
+		if (player) {
+			player->decrementReferenceCounter();
+		}
 		player = nullptr;
 	}
 	disconnect();
@@ -283,7 +318,7 @@ void ProtocolSpectator::parsePacket(NetworkMessage& msg)
 		return;
 	}
 
-	uint8_t recvbyte = msg.GetByte();
+	uint8_t recvbyte = msg.getByte();
 
 	if (!player) {
 		if (recvbyte == 0x0F) {
@@ -303,6 +338,9 @@ void ProtocolSpectator::parsePacket(NetworkMessage& msg)
 		case 0x14: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::logout, this))); break;
 		case 0x1D: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendPingBack, this))); break;
 		case 0x1E: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendPing, this))); break;
+		//Reset viewed position/direction if the spectator tries to move in any way
+		case 0x65: case 0x66: case 0x67: case 0x68: case 0x69: case 0x6A: case 0x6B: case 0x6C: case 0x6D: case 0x6E: case 0x6F: case 0x70: case 0x71:
+		case 0x72: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendCancelWalk, this))); break;
 		case 0x96: parseSpectatorSay(msg); break;
 		default:
 			break;
@@ -315,7 +353,7 @@ void ProtocolSpectator::parsePacket(NetworkMessage& msg)
 
 void ProtocolSpectator::parseSpectatorSay(NetworkMessage& msg)
 {
-	SpeakClasses type = (SpeakClasses)msg.GetByte();
+	SpeakClasses type = (SpeakClasses)msg.getByte();
 	uint16_t channelId = 0;
 
 	if (type == TALKTYPE_CHANNEL_Y) {
@@ -324,13 +362,15 @@ void ProtocolSpectator::parseSpectatorSay(NetworkMessage& msg)
 		return;
 	}
 
-	const std::string text = msg.GetString();
+	const std::string text = msg.getString();
 
 	if (text.length() > 255 || channelId != CHANNEL_CAST || !client) {
 		return;
 	}
 
-	g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::broadcastSpectatorMessage, client, text)));
+	if (client) {
+		g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::broadcastSpectatorMessage, client, text)));
+	}
 }
 
 void ProtocolSpectator::releaseProtocol()
@@ -338,6 +378,9 @@ void ProtocolSpectator::releaseProtocol()
 	if (client) {
 		client->removeSpectator(this);
 		client = nullptr;
+		if (player) {
+			player->decrementReferenceCounter();
+		}
 		player = nullptr;
 	}
 	Protocol::releaseProtocol();

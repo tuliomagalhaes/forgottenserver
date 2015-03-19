@@ -279,6 +279,32 @@ uint32_t Connection::getIP()
 	return htonl(endpoint.address().to_v4().to_ulong());
 }
 
+void Connection::dispatchBroadcastMessage(const OutputMessage_ptr& msg) {
+	auto msgCopy = OutputMessagePool::getInstance()->getOutputMessage(m_protocol, false);
+	if (msgCopy) {
+		msgCopy->append(msg);
+		m_io_service.dispatch(std::bind(&Connection::broadcastMessage, shared_from_this(), msgCopy));
+	}
+}
+
+void Connection::broadcastMessage(OutputMessage_ptr msg) {
+	std::lock_guard<std::recursive_mutex> lockClass(m_connectionLock);
+	const auto client = dynamic_cast<ProtocolGame*>(m_protocol);
+	if (client) {
+		std::lock_guard<decltype(client->liveCastLock)> lockGuard(client->liveCastLock);
+
+		const auto& spectators = client->getLiveCastSpectators();
+
+		for (const auto& spectator : spectators) {
+			auto newMsg = OutputMessagePool::getInstance()->getOutputMessage(spectator, false);
+			if (newMsg) {
+				newMsg->append(msg);
+				OutputMessagePool::getInstance()->send(newMsg);
+			}
+		}
+	}
+}
+
 void Connection::onWriteOperation(const boost::system::error_code& error)
 {
 	std::lock_guard<std::recursive_mutex> lockClass(connectionLock);

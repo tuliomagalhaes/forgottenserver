@@ -37,7 +37,7 @@ class ProtocolSpectator : public ProtocolGame
 		ProtocolGame* client;
 		OperatingSystem_t operatingSystem;
 
-		void login(const std::string& liveCastName, const std::string& liveCastPassword);
+		void login(const std::string& liveCastName, const std::string& password);
 		void logout();
 		
 		void disconnectSpectator(const std::string& message);
@@ -55,6 +55,7 @@ class ProtocolSpectator : public ProtocolGame
 		void onRecvFirstMessage(NetworkMessage& msg) override;
 
 		void parseSpectatorSay(NetworkMessage& msg);
+		void addDummyCreature(NetworkMessage& msg, const uint32_t& creatureID, const Position& playerPos);
 
 };
 

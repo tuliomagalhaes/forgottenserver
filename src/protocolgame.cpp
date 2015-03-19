@@ -42,7 +42,7 @@ extern Actions actions;
 extern CreatureEvents* g_creatureEvents;
 extern Chat* g_chat;
 
-ProtocolGame::LiveCastsMap ProtocolGame::m_liveCasts;
+ProtocolGame::LiveCastsMap ProtocolGame::liveCasts;
 
 ProtocolGame::ProtocolGame(Connection_ptr connection) :
 	Protocol(connection),
@@ -53,7 +53,7 @@ ProtocolGame::ProtocolGame(Connection_ptr connection) :
 	m_challengeRandom(0),
 	m_debugAssertSent(false),
 	m_acceptPackets(false),
-	m_isLiveCaster(false)
+	isCaster(false)
 {
 	//
 }
@@ -255,38 +255,50 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 
 bool ProtocolGame::startLiveCast(const std::string& password /*= ""*/)
 {
-	if (!g_config.getBoolean(ConfigManager::ENABLE_LIVE_CASTING) || m_isLiveCaster || !player || player->isRemoved() || !getConnection()) {
+	auto connection = getConnection();
+	if (!g_config.getBoolean(ConfigManager::ENABLE_LIVE_CASTING) || isLiveCaster() || !player || player->isRemoved() || !connection) {
 		return false;
 	}
 
-	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
+	{
+		std::lock_guard<decltype(liveCastLock)> lock {liveCastLock};
+		//DO NOT do any send operations here
+		if (liveCasts.size() >= getMaxLiveCastCount()) {
+			return false;
+		}
+		liveCastName = player->getName();
+		liveCastPassword = password;
+		isCaster = true;
+		liveCasts.insert(std::make_pair(player, this));
+	}
 
+	registerLiveCast();
 	//Send a "dummy" channel
 	sendChannel(CHANNEL_CAST, LIVE_CAST_CHAT_NAME, nullptr, nullptr);
-	m_liveCastName = player->getName();
-	m_liveCastPassword = password;
-	m_spectators.clear();
-	m_isLiveCaster = true;
-	registerLiveCast();
-
 	return true;
 }
 
 bool ProtocolGame::stopLiveCast()
 {
-	if (!m_isLiveCaster || !player) {
+	if (!isLiveCaster()) {
 		return false;
 	}
 
-	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
+	CastSpectatorVec spectators;
 
-	for (auto& spectator : m_spectators) {
-		spectator->disconnectClient("Live cast has been stopped. Relogin to refresh the cast list.");
-		spectator->unRef();
+	{
+		std::lock_guard<decltype(liveCastLock)> lock {liveCastLock};
+		//DO NOT do any send operations here
+		std::swap(spectators, spectators);
+		isCaster = false;
+		liveCasts.erase(player);
 	}
 
-	m_spectators.clear();
-	m_isLiveCaster = false;
+	for (auto& spectator : spectators) {
+		spectator->setPlayer(nullptr);
+		spectator->disconnect();
+		spectator->unRef();
+	}
 	unregisterLiveCast();
 
 	return true;
@@ -309,7 +321,6 @@ void ProtocolGame::registerLiveCast()
 	query << "INSERT into `live_casts` (`player_id`, `cast_name`, `password`) VALUES (" << player->getGUID() << ", '"
 		<< getLiveCastName() << "', " << isPasswordProtected() << ");";
 	g_databaseTasks.addTask(query.str());
-	m_liveCasts.insert(std::make_pair(player, this));
 }
 
 void ProtocolGame::unregisterLiveCast()
@@ -317,7 +328,6 @@ void ProtocolGame::unregisterLiveCast()
 	std::ostringstream query;
 	query << "DELETE FROM `live_casts` WHERE `player_id`=" << player->getGUID() << ";";
 	g_databaseTasks.addTask(query.str());
-	m_liveCasts.erase(player);
 }
 
 void ProtocolGame::updateLiveCastInfo()
@@ -332,8 +342,8 @@ void ProtocolGame::updateLiveCastInfo()
 void ProtocolGame::addSpectator(ProtocolGame* spectatorClient)
 {
 	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
-
-	m_spectators.push_back(spectatorClient);
+	//DO NOT do any send operations here
+	spectators.push_back(spectatorClient);
 	spectatorClient->addRef();
 	updateLiveCastInfo();
 }
@@ -341,13 +351,14 @@ void ProtocolGame::addSpectator(ProtocolGame* spectatorClient)
 void ProtocolGame::removeSpectator(ProtocolGame* spectatorClient)
 {
 	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
-
-	auto it = std::find(m_spectators.begin(), m_spectators.end(), spectatorClient);
-	if (it != m_spectators.end()) {
-		m_spectators.erase(it);
+	//DO NOT do any send operations here
+	auto it = std::find(spectators.begin(), spectators.end(), spectatorClient);
+	if (it != spectators.end()) {
+		spectators.erase(it);
 		spectatorClient->unRef();
+		updateLiveCastInfo();
 	}
-	updateLiveCastInfo();
+	
 }
 
 void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
@@ -488,8 +499,6 @@ void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg)
 	out->append(msg);
 }
 
-
-
 void ProtocolGame::parsePacket(NetworkMessage& msg)
 {
 	if (!m_acceptPackets || g_game.getGameState() == GAME_STATE_SHUTDOWN || msg.getLength() <= 0) {
@@ -498,16 +507,9 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 
 	uint8_t recvbyte = msg.getByte();
 
-	if (!player) {
-		if (recvbyte == 0x0F) {
-			disconnect();
-		}
-
-		return;
-	}
-
 	//a dead player can not perform actions
-	if (player->isRemoved() || player->getHealth() <= 0) {
+	if (!player || player->isRemoved() || player->getHealth() <= 0) {
+		stopLiveCast();
 		if (recvbyte == 0x0F) {
 			disconnect();
 			return;
@@ -1388,6 +1390,7 @@ void ProtocolGame::sendReLoginWindow(uint8_t unfairFightReduction)
 	msg.addByte(0x28);
 	msg.addByte(0x00);
 	msg.addByte(unfairFightReduction);
+
 	writeToOutputBuffer(msg);
 }
 
