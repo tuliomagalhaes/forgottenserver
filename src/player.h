@@ -1359,6 +1359,7 @@ class Player final : public Creature, public Cylinder
 		friend class Map;
 		friend class Actions;
 		friend class IOLoginData;
+		friend class ProtocolGameBase;
 		friend class ProtocolGame;
 };
 

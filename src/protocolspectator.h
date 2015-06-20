@@ -20,10 +20,11 @@
 #ifndef FS_PROTOCOLSPECTATOR_H
 #define FS_PROTOCOLSPECTATOR_H
 
-#include "protocolgame.h"
+#include "protocolgamebase.h"
 
+class ProtocolGame;
 
-class ProtocolSpectator : public ProtocolGame
+class ProtocolSpectator final : public ProtocolGameBase
 {
 	public:
 		static const char* protocol_name() {
@@ -41,18 +42,18 @@ class ProtocolSpectator : public ProtocolGame
 		void logout();
 		
 		void disconnectSpectator(const std::string& message);
-		void writeToOutputBuffer(const NetworkMessage& msg);
+		void writeToOutputBuffer(const NetworkMessage& msg, bool broadcast = true) final;
 		
 		void syncKnownCreatureSets();
 		void syncChatChannels();
 		void syncOpenContainers();
 		void sendEmptyTileOnPlayerPos(const Tile* tile, const Position& playerPos);
 		
-		void releaseProtocol() override;
-		void deleteProtocolTask() override;
+		void releaseProtocol() final;
+		void deleteProtocolTask() final;
 
-		void parsePacket(NetworkMessage& msg) override;
-		void onRecvFirstMessage(NetworkMessage& msg) override;
+		void parsePacket(NetworkMessage& msg) final;
+		void onRecvFirstMessage(NetworkMessage& msg) final;
 
 		void parseSpectatorSay(NetworkMessage& msg);
 		void addDummyCreature(NetworkMessage& msg, const uint32_t& creatureID, const Position& playerPos);

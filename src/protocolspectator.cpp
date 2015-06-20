@@ -19,6 +19,7 @@
 
 #include "otpch.h"
 
+#include "protocolgame.h"
 #include "protocolspectator.h"
 
 #include "outputmessage.h"
@@ -40,7 +41,7 @@ extern ConfigManager g_config;
 extern Chat* g_chat;
 
 ProtocolSpectator::ProtocolSpectator(Connection_ptr connection):
-	ProtocolGame(connection),
+	ProtocolGameBase(connection),
 	client(nullptr)
 {
 
@@ -146,7 +147,7 @@ void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 		dispatchDisconnectClient(ss.str());
 		return;
 	}
-	password.erase(password.begin());
+	password.erase(password.begin()); //Erase whitespace from the front of the password string
 	g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::login, this, characterName, password)));
 }
 
@@ -267,7 +268,7 @@ void ProtocolSpectator::login(const std::string& liveCastName, const std::string
 		return;
 	}
 
-	const auto liveCasterProtocol = getLiveCast(_player);
+	const auto liveCasterProtocol = ProtocolGame::getLiveCast(_player);
 
 	if (!liveCasterProtocol) {
 		disconnectSpectator("Live cast no longer exists. Please relogin to refresh the list.");
@@ -386,7 +387,7 @@ void ProtocolSpectator::releaseProtocol()
 	Protocol::releaseProtocol();
 }
 
-void ProtocolSpectator::writeToOutputBuffer(const NetworkMessage& msg)
+void ProtocolSpectator::writeToOutputBuffer(const NetworkMessage& msg, bool broadcast)
 {
 	OutputMessage_ptr out = getOutputBuffer(msg.getLength());
 
