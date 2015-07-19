@@ -23,6 +23,9 @@
 #include "protocolgamebase.h"
 
 class ProtocolGame;
+class ProtocolSpectator;
+typedef std::shared_ptr<ProtocolGame> ProtocolGame_ptr;
+typedef std::shared_ptr<ProtocolSpectator> ProtocolSpectator_ptr;
 
 class ProtocolSpectator final : public ProtocolGameBase
 {
@@ -32,16 +35,18 @@ class ProtocolSpectator final : public ProtocolGameBase
 		}
 
 		ProtocolSpectator(Connection_ptr connection);
-
+		void onLiveCastStop();
 	private:
-
-		ProtocolGame* client;
+		ProtocolSpectator_ptr getThis() {
+			return std::static_pointer_cast<ProtocolSpectator>(shared_from_this());
+		}
+		ProtocolGame_ptr client;
 		OperatingSystem_t operatingSystem;
 
 		void login(const std::string& liveCastName, const std::string& password);
 		void logout();
 		
-		void disconnectSpectator(const std::string& message);
+		void disconnectSpectator(const std::string& message) const;
 		void writeToOutputBuffer(const NetworkMessage& msg, bool broadcast = true) final;
 		
 		void syncKnownCreatureSets();
@@ -49,8 +54,7 @@ class ProtocolSpectator final : public ProtocolGameBase
 		void syncOpenContainers();
 		void sendEmptyTileOnPlayerPos(const Tile* tile, const Position& playerPos);
 		
-		void releaseProtocol() final;
-		void deleteProtocolTask() final;
+		void release() final;
 
 		void parsePacket(NetworkMessage& msg) final;
 		void onRecvFirstMessage(NetworkMessage& msg) final;

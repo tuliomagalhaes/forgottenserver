@@ -265,7 +265,7 @@ bool ProtocolGame::startLiveCast(const std::string& password /*= ""*/)
 		liveCastName = player->getName();
 		liveCastPassword = password;
 		isCaster = true;
-		liveCasts.insert(std::make_pair(player, this));
+		liveCasts.insert(std::make_pair(player, getThis()));
 	}
 
 	registerLiveCast();
@@ -276,6 +276,7 @@ bool ProtocolGame::startLiveCast(const std::string& password /*= ""*/)
 
 bool ProtocolGame::stopLiveCast()
 {
+	//dispatcher
 	if (!isLiveCaster()) {
 		return false;
 	}
@@ -285,15 +286,13 @@ bool ProtocolGame::stopLiveCast()
 	{
 		std::lock_guard<decltype(liveCastLock)> lock {liveCastLock};
 		//DO NOT do any send operations here
-		std::swap(spectators, spectators);
+		std::swap(this->spectators, spectators);
 		isCaster = false;
-		liveCasts.erase(player);
 	}
 
+
 	for (auto& spectator : spectators) {
-		spectator->setPlayer(nullptr);
-		spectator->disconnect();
-		spectator->unRef();
+		spectator->onLiveCastStop();
 	}
 	unregisterLiveCast();
 
@@ -335,23 +334,21 @@ void ProtocolGame::updateLiveCastInfo()
 	g_databaseTasks.addTask(query.str());
 }
 
-void ProtocolGame::addSpectator(ProtocolSpectator* spectatorClient)
+void ProtocolGame::addSpectator(ProtocolSpectator_ptr spectatorClient)
 {
 	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
 	//DO NOT do any send operations here
-	spectators.push_back(spectatorClient);
-	spectatorClient->addRef();
+	spectators.emplace_back(spectatorClient);
 	updateLiveCastInfo();
 }
 
-void ProtocolGame::removeSpectator(ProtocolSpectator* spectatorClient)
+void ProtocolGame::removeSpectator(ProtocolSpectator_ptr spectatorClient)
 {
 	std::lock_guard<decltype(liveCastLock)> lock(liveCastLock);
 	//DO NOT do any send operations here
 	auto it = std::find(spectators.begin(), spectators.end(), spectatorClient);
 	if (it != spectators.end()) {
 		spectators.erase(it);
-		spectatorClient->unRef();
 		updateLiveCastInfo();
 	}
 
@@ -452,34 +449,6 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 	g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::login, getThis(), characterName, accountId, operatingSystem)));
 }
 
-void ProtocolGame::onConnect()
-{
-	auto output = OutputMessagePool::getOutputMessage();
-	static std::random_device rd;
-	static std::ranlux24 generator(rd());
-	static std::uniform_int_distribution<uint16_t> randNumber(0x00, 0xFF);
-
-	// Skip checksum
-	output->skipBytes(sizeof(uint32_t));
-
-	// Packet length & type
-	output->add<uint16_t>(0x0006);
-	output->addByte(0x1F);
-
-	// Add timestamp & random number
-	m_challengeTimestamp = static_cast<uint32_t>(time(nullptr));
-	output->add<uint32_t>(m_challengeTimestamp);
-
-	m_challengeRandom = randNumber(generator);
-	output->addByte(m_challengeRandom);
-
-	// Go back and write checksum
-	output->skipBytes(-12);
-	output->add<uint32_t>(adlerChecksum(output->getOutputBuffer() + sizeof(uint32_t), 8));
-
-	send(output);
-}
-
 void ProtocolGame::disconnectClient(const std::string& message) const
 {
 	auto output = OutputMessagePool::getOutputMessage();
@@ -492,26 +461,18 @@ void ProtocolGame::disconnectClient(const std::string& message) const
 
 void ProtocolGame::writeToOutputBuffer(const NetworkMessage& msg, bool broadcast /*= true*/)
 {
-	OutputMessage_ptr out;
 	if (!broadcast && isLiveCaster()) {
 		//We're casting and we need to send a packet that's not supposed to be broadcast so we need a new messasge.
 		//This shouldn't impact performance by a huge amount as most packets can be broadcast.
-		out = OutputMessagePool::getInstance()->getOutputMessage(this, false);
-
-		if (out) {
-			out->append(msg);
-			if (auto connection = getConnection()) {
-				connection->send(out);
-			}
-		}
+		auto out = OutputMessagePool::getOutputMessage();
+		out->append(msg);
+		send(std::move(out));
 	} else {
-		out = getOutputBuffer(msg.getLength());
-		if (out) {
-			if (isLiveCaster()) {
-				out->setBroadcastMsg(true);
-			}
-			out->append(msg);
+		auto out = getOutputBuffer(msg.getLength());
+		if (isLiveCaster()) {
+			out->setBroadcastMsg(true);
 		}
+		out->append(msg);
 	}
 }
 
@@ -525,7 +486,7 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 
 	//a dead player can not perform actions
 	if (!player || player->isRemoved() || player->getHealth() <= 0) {
-		stopLiveCast();
+		g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::stopLiveCast, getThis())));
 		if (recvbyte == 0x0F) {
 			disconnect();
 			return;

@@ -83,18 +83,18 @@ class ProtocolGame final : public ProtocolGameBase
 			return knownCreatureSet;
 		}
 
-		typedef std::unordered_map<Player*, ProtocolGame*> LiveCastsMap;
-		typedef std::vector<ProtocolSpectator*> CastSpectatorVec;
+		typedef std::unordered_map<Player*, ProtocolGame_ptr> LiveCastsMap;
+		typedef std::vector<ProtocolSpectator_ptr> CastSpectatorVec;
 
 		/** \brief Adds a spectator from the spectators vector.
 		 *  \param spectatorClient pointer to the \ref ProtocolSpectator object representing the spectator
 		 */
-		void addSpectator(ProtocolSpectator* spectatorClient);
+		void addSpectator(ProtocolSpectator_ptr spectatorClient);
 
 		/** \brief Removes a spectator from the spectators vector.
 		 *  \param spectatorClient pointer to the \ref ProtocolSpectator object representing the spectator
 		 */
-		void removeSpectator(ProtocolSpectator* spectatorClient);
+		void removeSpectator(ProtocolSpectator_ptr spectatorClient);
 
 		/** \brief Starts the live cast.
 		 *  \param password live cast password(optional)
@@ -149,7 +149,7 @@ class ProtocolGame final : public ProtocolGameBase
 		 *  \param player pointer to the casting \ref Player object
 		 *  \returns A pointer to the \ref ProtocolGame of the caster
 		 */
-		static ProtocolGame* getLiveCast(Player* player) {
+		static ProtocolGame_ptr getLiveCast(Player* player) {
 			const auto it = liveCasts.find(player);
 			return it != liveCasts.end() ? it->second : nullptr;
 		}
@@ -183,7 +183,7 @@ class ProtocolGame final : public ProtocolGameBase
 		 *  \param text string containing the text message
 		 */
 		void broadcastSpectatorMessage(const std::string& text) {
-			if (getConnection() && player) {
+			if (player) {
 				sendChannelMessage("Spectator", text, TALKTYPE_CHANNEL_Y, CHANNEL_CAST);
 			}
 		}
@@ -202,12 +202,6 @@ class ProtocolGame final : public ProtocolGameBase
 		void release() final;
 
 		void checkCreatureAsKnown(uint32_t id, bool& known, uint32_t& removedKnown);
-	protected:
-		void connect(uint32_t playerId, OperatingSystem_t operatingSystem);
-		void disconnectClient(const std::string& message);
-
-		void releaseProtocol() final;
-		void deleteProtocolTask() final;
 
 		// we have all the parse methods
 		void parsePacket(NetworkMessage& msg) final;

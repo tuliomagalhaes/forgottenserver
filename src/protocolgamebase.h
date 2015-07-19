@@ -43,11 +43,6 @@ class ProtocolGameBase : public Protocol {
 		enum {protocol_identifier = 0}; // Not required as we send first
 		enum {use_checksum = true};
 
-	void setPlayer(Player* p) {
-			player = p;
-	}
-	void disconnect() const;
-
 	protected:
 		explicit ProtocolGameBase(Connection_ptr connection):
 			Protocol(connection),

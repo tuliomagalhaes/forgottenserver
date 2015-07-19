@@ -250,7 +250,11 @@ void Connection::send(const OutputMessage_ptr& msg)
 
 void Connection::internalSend(const OutputMessage_ptr& msg)
 {
+	if (msg->isBroadcastMsg()) {
+		dispatchBroadcastMessage(msg);
+	}
 	protocol->onSendMessage(msg);
+
 	try {
 		writeTimer.expires_from_now(boost::posix_time::seconds(Connection::write_timeout));
 		writeTimer.async_wait(std::bind(&Connection::handleTimeout, std::weak_ptr<Connection>(shared_from_this()),
@@ -280,27 +284,23 @@ uint32_t Connection::getIP()
 }
 
 void Connection::dispatchBroadcastMessage(const OutputMessage_ptr& msg) {
-	auto msgCopy = OutputMessagePool::getInstance()->getOutputMessage(m_protocol, false);
-	if (msgCopy) {
-		msgCopy->append(msg);
-		m_io_service.dispatch(std::bind(&Connection::broadcastMessage, shared_from_this(), msgCopy));
-	}
+	auto msgCopy = OutputMessagePool::getOutputMessage();
+	msgCopy->append(msg);
+	m_io_service.dispatch(std::bind(&Connection::broadcastMessage, shared_from_this(), msgCopy));
 }
 
 void Connection::broadcastMessage(OutputMessage_ptr msg) {
 	std::lock_guard<std::recursive_mutex> lockClass(m_connectionLock);
-	const auto client = dynamic_cast<ProtocolGame*>(m_protocol);
+	const auto client = std::dynamic_pointer_cast<ProtocolGame>(m_protocol);
 	if (client) {
 		std::lock_guard<decltype(client->liveCastLock)> lockGuard(client->liveCastLock);
 
 		const auto& spectators = client->getLiveCastSpectators();
 
 		for (const auto& spectator : spectators) {
-			auto newMsg = OutputMessagePool::getInstance()->getOutputMessage(spectator, false);
-			if (newMsg) {
-				newMsg->append(msg);
-				OutputMessagePool::getInstance()->send(newMsg);
-			}
+			auto newMsg = OutputMessagePool::getOutputMessage();
+			newMsg->append(msg);
+			spectator->send(std::move(newMsg));
 		}
 	}
 }

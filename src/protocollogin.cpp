@@ -80,20 +80,19 @@ void ProtocolLogin::addWorldInfo(OutputMessage_ptr& output, const std::string& a
 void ProtocolLogin::getCastingStreamsList(const std::string& password, uint16_t version)
 {
 	//dispatcher thread
-	OutputMessage_ptr output = OutputMessagePool::getInstance()->getOutputMessage(this, false);
-	if (output) {
-		addWorldInfo(output, "", password, version, true);
+	auto output = OutputMessagePool::getOutputMessage();
+	addWorldInfo(output, "", password, version, true);
 
-		const auto& casts = ProtocolGame::getLiveCasts();
-		output->addByte(casts.size());
-		for (const auto& cast : casts) {
-			output->addByte(0);
-			output->addString(cast.first->getName());
-		}
-		output->add<uint16_t>(0x0); //The client expects the number of premium days left.
-		OutputMessagePool::getInstance()->send(output);
+	const auto& casts = ProtocolGame::getLiveCasts();
+	output->addByte(casts.size());
+	for (const auto& cast : casts) {
+		output->addByte(0);
+		output->addString(cast.first->getName());
 	}
-	getConnection()->close();
+	output->add<uint16_t>(0x0); //The client expects the number of premium days left.
+	send(std::move(output));
+
+	disconnect();
 }
 
 void ProtocolLogin::getCharacterList(const std::string& accountName, const std::string& password, uint16_t version)
@@ -109,7 +108,7 @@ void ProtocolLogin::getCharacterList(const std::string& accountName, const std::
 	//Update premium days
 	Game::updatePremium(account);
 
-	addWorldInfo(output);
+	addWorldInfo(output, accountName, password, version);
 
 	uint8_t size = std::min<size_t>(std::numeric_limits<uint8_t>::max(), account.characters.size());
 	output->addByte(size);
@@ -211,7 +210,7 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 
 	std::string accountName = msg.getString();
 	std::string password = msg.getString();
-	auto thisPtr = std::dynamic_pointer_cast<ProtocolLogin>(shared_from_this());
+	auto thisPtr = std::static_pointer_cast<ProtocolLogin>(shared_from_this());
 	if (accountName.empty()) {
 		if (g_config.getBoolean(ConfigManager::ENABLE_LIVE_CASTING)) {
 			g_dispatcher.addTask(createTask(std::bind(&ProtocolLogin::getCastingStreamsList, thisPtr, password, version)));
@@ -221,6 +220,5 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		return;
 	}
 
-	std::string password = msg.getString();
 	g_dispatcher.addTask(createTask(std::bind(&ProtocolLogin::getCharacterList, thisPtr, accountName, password, version)));
 }

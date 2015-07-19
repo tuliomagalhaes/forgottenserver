@@ -47,35 +47,19 @@ ProtocolSpectator::ProtocolSpectator(Connection_ptr connection):
 
 }
 
-void ProtocolSpectator::deleteProtocolTask()
+void ProtocolSpectator::disconnectSpectator(const std::string& message) const
 {
-    Protocol::deleteProtocolTask();
-}
-
-void ProtocolSpectator::disconnectSpectator(const std::string& message)
-{
-	if (client) {
-		client->removeSpectator(this);
-		if (player) {
-			player->decrementReferenceCounter();
-		}
-		player = nullptr;
-		client = nullptr;
-	}
-
-	OutputMessage_ptr output = OutputMessagePool::getInstance()->getOutputMessage(this, false);
-	if (output) {
-		output->addByte(0x14);
-		output->addString(message);
-		OutputMessagePool::getInstance()->send(output);
-	}
+	auto output = OutputMessagePool::getOutputMessage();
+	output->addByte(0x14);
+	output->addString(message);
+	send(std::move(output));
 	disconnect();
 }
 
 void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 {
 	if (g_game.getGameState() == GAME_STATE_SHUTDOWN) {
-		getConnection()->close();
+		disconnect();
 		return;
 	}
 
@@ -85,7 +69,7 @@ void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 	msg.skipBytes(7); // U32 clientVersion, U8 clientType
 
 	if (!RSA_decrypt(msg)) {
-		getConnection()->close();
+		disconnect();
 		return;
 	}
 
@@ -113,26 +97,22 @@ void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 	uint32_t timeStamp = msg.get<uint32_t>();
 	uint8_t randNumber = msg.getByte();
 	if (m_challengeTimestamp != timeStamp || m_challengeRandom != randNumber) {
-		getConnection()->close();
+		disconnect();
 		return;
 	}
-	auto dispatchDisconnectClient = [this](const std::string& msg) {
-		g_dispatcher.addTask(createTask(
-					std::bind(&ProtocolSpectator::disconnectSpectator, this, msg)));
-	};
+
 	if (version < CLIENT_VERSION_MIN || version > CLIENT_VERSION_MAX) {
-		
-		dispatchDisconnectClient("Only clients with protocol " CLIENT_VERSION_STR " allowed!");
+		disconnectSpectator("Only clients with protocol " CLIENT_VERSION_STR " allowed!");
 		return;
 	}
 
 	if (g_game.getGameState() == GAME_STATE_STARTUP) {
-		dispatchDisconnectClient("Gameworld is starting up. Please wait.");
+		disconnectSpectator("Gameworld is starting up. Please wait.");
 		return;
 	}
 
 	if (g_game.getGameState() == GAME_STATE_MAINTAIN) {
-		dispatchDisconnectClient("Gameworld is under maintenance. Please re-connect in a while.");
+		disconnectSpectator("Gameworld is under maintenance. Please re-connect in a while.");
 		return;
 	}
 	
@@ -144,11 +124,11 @@ void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 
 		std::ostringstream ss;
 		ss << "Your IP has been banned until " << formatDateShort(banInfo.expiresAt) << " by " << banInfo.bannedBy << ".\n\nReason specified:\n" << banInfo.reason;
-		dispatchDisconnectClient(ss.str());
+		disconnectSpectator(ss.str());
 		return;
 	}
 	password.erase(password.begin()); //Erase whitespace from the front of the password string
-	g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::login, this, characterName, password)));
+	g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::login, std::static_pointer_cast<ProtocolSpectator>(shared_from_this()), characterName, password)));
 }
 
 void ProtocolSpectator::sendEmptyTileOnPlayerPos(const Tile* tile, const Position& playerPos)
@@ -251,7 +231,7 @@ void ProtocolSpectator::syncChatChannels()
 
 void ProtocolSpectator::syncOpenContainers()
 {
-	const auto openContainers = player->getOpenContainers();
+	const auto& openContainers = player->getOpenContainers();
 	for (const auto& it : openContainers) {
 		auto openContainer = it.second;
 		auto container = openContainer.container;
@@ -287,13 +267,13 @@ void ProtocolSpectator::login(const std::string& liveCastName, const std::string
 		eventConnect = 0;
 		client = liveCasterProtocol;
 		m_acceptPackets = true;
-
+		OutputMessagePool::getInstance().addProtocolToAutosend(shared_from_this());
 		sendAddCreature(player, player->getPosition(), 0, false);
 		syncKnownCreatureSets();
 		syncChatChannels();
 		syncOpenContainers();
 
-		liveCasterProtocol->addSpectator(this);
+		liveCasterProtocol->addSpectator(std::static_pointer_cast<ProtocolSpectator>(shared_from_this()));
 	} else {
 		disconnectSpectator("Live cast no longer exists. Please relogin to refresh the list.");
 	}
@@ -302,12 +282,9 @@ void ProtocolSpectator::login(const std::string& liveCastName, const std::string
 void ProtocolSpectator::logout()
 {
 	m_acceptPackets = false;
-	if (client) {
-		client->removeSpectator(this);
-		client = nullptr;
-		if (player) {
-			player->decrementReferenceCounter();
-		}
+	if (client && player) {
+		client->removeSpectator(std::static_pointer_cast<ProtocolSpectator>(shared_from_this()));
+		player->decrementReferenceCounter();
 		player = nullptr;
 	}
 	disconnect();
@@ -336,12 +313,12 @@ void ProtocolSpectator::parsePacket(NetworkMessage& msg)
 	}
 
 	switch (recvbyte) {
-		case 0x14: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::logout, this))); break;
-		case 0x1D: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendPingBack, this))); break;
-		case 0x1E: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendPing, this))); break;
+		case 0x14: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::logout, getThis()))); break;
+		case 0x1D: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendPingBack, getThis()))); break;
+		case 0x1E: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendPing, getThis()))); break;
 		//Reset viewed position/direction if the spectator tries to move in any way
 		case 0x65: case 0x66: case 0x67: case 0x68: case 0x69: case 0x6A: case 0x6B: case 0x6C: case 0x6D: case 0x6E: case 0x6F: case 0x70: case 0x71:
-		case 0x72: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendCancelWalk, this))); break;
+		case 0x72: g_dispatcher.addTask(createTask(std::bind(&ProtocolSpectator::sendCancelWalk, getThis()))); break;
 		case 0x96: parseSpectatorSay(msg); break;
 		default:
 			break;
@@ -374,17 +351,16 @@ void ProtocolSpectator::parseSpectatorSay(NetworkMessage& msg)
 	}
 }
 
-void ProtocolSpectator::releaseProtocol()
+void ProtocolSpectator::release()
 {
-	if (client) {
-		client->removeSpectator(this);
-		client = nullptr;
-		if (player) {
-			player->decrementReferenceCounter();
-		}
+	//dispatcher
+	if (client && player) {
+		client->removeSpectator(std::static_pointer_cast<ProtocolSpectator>(shared_from_this()));
+		player->decrementReferenceCounter();
 		player = nullptr;
 	}
-	Protocol::releaseProtocol();
+	Protocol::release();
+	OutputMessagePool::getInstance().removeProtocolFromAutosend(shared_from_this());
 }
 
 void ProtocolSpectator::writeToOutputBuffer(const NetworkMessage& msg, bool broadcast)
@@ -396,3 +372,12 @@ void ProtocolSpectator::writeToOutputBuffer(const NetworkMessage& msg, bool broa
 	}
 }
 
+void ProtocolSpectator::onLiveCastStop()
+{
+	//dispatcher
+	if (player) {
+		player->decrementReferenceCounter();
+		player = nullptr;
+	}
+	disconnect();
+}

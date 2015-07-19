@@ -27,42 +27,32 @@
 
 extern Game g_game;
 
-void ProtocolGameBase::disconnect() const
-{
-	Connection_ptr connection = getConnection();
-	if (connection) {
-		connection->close();
-	}
-}
-
 void ProtocolGameBase::onConnect()
 {
-	OutputMessage_ptr output = OutputMessagePool::getInstance()->getOutputMessage(this, false);
-	if (output) {
-		static std::random_device rd;
-		static std::ranlux24 generator(rd());
-		static std::uniform_int_distribution<uint16_t> randNumber(0x00, 0xFF);
+	auto output = OutputMessagePool::getOutputMessage();
+	static std::random_device rd;
+	static std::ranlux24 generator(rd());
+	static std::uniform_int_distribution<uint16_t> randNumber(0x00, 0xFF);
 
-		// Skip checksum
-		output->skipBytes(sizeof(uint32_t));
+	// Skip checksum
+	output->skipBytes(sizeof(uint32_t));
 
-		// Packet length & type
-		output->add<uint16_t>(0x0006);
-		output->addByte(0x1F);
+	// Packet length & type
+	output->add<uint16_t>(0x0006);
+	output->addByte(0x1F);
 
-		// Add timestamp & random number
-		m_challengeTimestamp = static_cast<uint32_t>(time(nullptr));
-		output->add<uint32_t>(m_challengeTimestamp);
+	// Add timestamp & random number
+	m_challengeTimestamp = static_cast<uint32_t>(time(nullptr));
+	output->add<uint32_t>(m_challengeTimestamp);
 
-		m_challengeRandom = randNumber(generator);
-		output->addByte(m_challengeRandom);
+	m_challengeRandom = randNumber(generator);
+	output->addByte(m_challengeRandom);
 
-		// Go back and write checksum
-		output->skipBytes(-12);
-		output->add<uint32_t>(adlerChecksum(output->getOutputBuffer() + sizeof(uint32_t), 8));
+	// Go back and write checksum
+	output->skipBytes(-12);
+	output->add<uint32_t>(adlerChecksum(output->getOutputBuffer() + sizeof(uint32_t), 8));
 
-		OutputMessagePool::getInstance()->send(output);
-	}
+	send(std::move(output));
 }
 
 void ProtocolGameBase::AddOutfit(NetworkMessage& msg, const Outfit_t& outfit)
