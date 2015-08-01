@@ -286,12 +286,12 @@ uint32_t Connection::getIP()
 void Connection::dispatchBroadcastMessage(const OutputMessage_ptr& msg) {
 	auto msgCopy = OutputMessagePool::getOutputMessage();
 	msgCopy->append(msg);
-	m_io_service.dispatch(std::bind(&Connection::broadcastMessage, shared_from_this(), msgCopy));
+	io_service.dispatch(std::bind(&Connection::broadcastMessage, shared_from_this(), msgCopy));
 }
 
 void Connection::broadcastMessage(OutputMessage_ptr msg) {
-	std::lock_guard<std::recursive_mutex> lockClass(m_connectionLock);
-	const auto client = std::dynamic_pointer_cast<ProtocolGame>(m_protocol);
+	std::lock_guard<std::recursive_mutex> lockClass(connectionLock);
+	const auto client = std::dynamic_pointer_cast<ProtocolGame>(protocol);
 	if (client) {
 		std::lock_guard<decltype(client->liveCastLock)> lockGuard(client->liveCastLock);
 
