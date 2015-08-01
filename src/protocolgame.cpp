@@ -252,16 +252,13 @@ void ProtocolGame::logout(bool displayEffect, bool forced)
 bool ProtocolGame::startLiveCast(const std::string& password /*= ""*/)
 {
 	auto connection = getConnection();
-	if (!g_config.getBoolean(ConfigManager::ENABLE_LIVE_CASTING) || isLiveCaster() || !player || player->isRemoved() || !connection) {
+	if (!g_config.getBoolean(ConfigManager::ENABLE_LIVE_CASTING) || isLiveCaster() || !player || player->isRemoved() || !connection || liveCasts.size() >= getMaxLiveCastCount()) {
 		return false;
 	}
 
 	{
 		std::lock_guard<decltype(liveCastLock)> lock {liveCastLock};
 		//DO NOT do any send operations here
-		if (liveCasts.size() >= getMaxLiveCastCount()) {
-			return false;
-		}
 		liveCastName = player->getName();
 		liveCastPassword = password;
 		isCaster = true;
@@ -290,12 +287,12 @@ bool ProtocolGame::stopLiveCast()
 		isCaster = false;
 	}
 
-
+	liveCasts.erase(player);
 	for (auto& spectator : spectators) {
 		spectator->onLiveCastStop();
 	}
 	unregisterLiveCast();
-
+	
 	return true;
 }
 
@@ -776,11 +773,7 @@ void ProtocolGame::parseSay(NetworkMessage& msg)
 		return;
 	}
 
-	if (channelId == CHANNEL_CAST) {
-		g_dispatcher.addTask(createTask(std::bind(&ProtocolGame::sendChannelMessage, this, player->getName(), text, TALKTYPE_CHANNEL_R1, channelId)));
-	} else {
-		addGameTask(&Game::playerSay, player->getID(), channelId, type, receiver, text);
-	}
+	addGameTask(&Game::playerSay, player->getID(), channelId, type, receiver, text);
 }
 
 void ProtocolGame::parseFightModes(NetworkMessage& msg)
