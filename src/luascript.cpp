@@ -5477,11 +5477,12 @@ int LuaScriptInterface::luaNetworkMessageSendToPlayer(lua_State* L)
 {
 	// networkMessage:sendToPlayer(player[, broadcast])
 	NetworkMessage* message = getUserdata<NetworkMessage>(L, 1);
+
 	if (!message) {
 		lua_pushnil(L);
 		return 1;
 	}
-	
+
 	Player* player = getPlayer(L, 2);
 	if (player) {
 		bool broadcast = getBoolean(L, 3, true);
