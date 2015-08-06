@@ -398,6 +398,7 @@ class ProtocolGame final : public ProtocolGameBase
 
 		/// Live cast name that is also used as login
 		std::string liveCastName;
+
 		/// Password used to access the live cast
 		std::string liveCastPassword;
 };

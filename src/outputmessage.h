@@ -66,12 +66,10 @@ class OutputMessage : public NetworkMessage
 			position += msgLen;
 		}
 
-		bool isBroadcastMsg()
-		{
+		bool isBroadcastMsg() const {
 			return isBroadcastMesssage;
 		}
-		void setBroadcastMsg(bool isBroadcastMesssage)
-		{
+		void setBroadcastMsg(bool isBroadcastMesssage) {
 			this->isBroadcastMesssage = isBroadcastMesssage;
 		}
 	protected:

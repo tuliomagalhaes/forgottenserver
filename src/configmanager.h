@@ -45,6 +45,7 @@ class ConfigManager
 			CONVERT_UNSAFE_SCRIPTS,
 			CLASSIC_EQUIPMENT_SLOTS,
 			ENABLE_LIVE_CASTING,
+
 			LAST_BOOLEAN_CONFIG /* this must be the last one */
 		};
 
@@ -104,6 +105,7 @@ class ConfigManager
 			EXP_FROM_PLAYERS_LEVEL_RANGE,
 			MAX_PACKETS_PER_SECOND,
 			LIVE_CAST_PORT,
+
 			LAST_INTEGER_CONFIG /* this must be the last one */
 		};
 
