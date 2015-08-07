@@ -1,5 +1,4 @@
-function onSay(cid, words, param)
-	local player = Player(cid)
+function onSay(player, words, param)
 	if player:stopLiveCast(param) then
 		player:sendTextMessage(MESSAGE_INFO_DESCR, "You have stopped casting your gameplay.")
 	else

@@ -1140,15 +1140,15 @@ class Player final : public Creature, public Cylinder
 		bool hasLearnedInstantSpell(const std::string& spellName) const;
 
 		bool startLiveCast(const std::string& password) {
-			return client != nullptr && client->startLiveCast(password);
+			return client && client->startLiveCast(password);
 		}
 
 		bool stopLiveCast() {
-			return client != nullptr && client->stopLiveCast();
+			return client && client->stopLiveCast();
 		}
 
 		bool isLiveCaster() const {
-			return client != nullptr && client->isLiveCaster();
+			return client && client->isLiveCaster();
 		}
 
 		const std::map<uint8_t, OpenContainer>& getOpenContainers() const {

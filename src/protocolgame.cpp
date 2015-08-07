@@ -302,7 +302,7 @@ void ProtocolGame::clearLiveCastInfo()
 	std::call_once(flag, []() {
 			assert(g_game.getGameState() == GAME_STATE_INIT);
 			std::ostringstream query;
-			query << "DELETE FROM `live_casts`;";
+			query << "TRUNCATE TABLE `live_casts`;";
 			g_databaseTasks.addTask(query.str());
 		});
 }
