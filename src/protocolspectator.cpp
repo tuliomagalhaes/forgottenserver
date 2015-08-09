@@ -92,7 +92,6 @@ void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 	msg.skipBytes(1); // gamemaster flag
 	std::string password = msg.getString();
 	std::string characterName = msg.getString();
-	
 
 	uint32_t timeStamp = msg.get<uint32_t>();
 	uint8_t randNumber = msg.getByte();
@@ -115,7 +114,7 @@ void ProtocolSpectator::onRecvFirstMessage(NetworkMessage& msg)
 		disconnectSpectator("Gameworld is under maintenance. Please re-connect in a while.");
 		return;
 	}
-	
+
 	BanInfo banInfo;
 	if (IOBan::isIpBanned(getIP(), banInfo)) {
 		if (banInfo.reason.empty()) {
@@ -249,7 +248,6 @@ void ProtocolSpectator::login(const std::string& liveCastName, const std::string
 	}
 
 	const auto liveCasterProtocol = ProtocolGame::getLiveCast(_player);
-
 	if (!liveCasterProtocol) {
 		disconnectSpectator("Live cast no longer exists. Please relogin to refresh the list.");
 		return;
@@ -366,10 +364,7 @@ void ProtocolSpectator::release()
 void ProtocolSpectator::writeToOutputBuffer(const NetworkMessage& msg, bool broadcast)
 {
 	OutputMessage_ptr out = getOutputBuffer(msg.getLength());
-
-	if (out) {
-		out->append(msg);
-	}
+	out->append(msg);
 }
 
 void ProtocolSpectator::onLiveCastStop()

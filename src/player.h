@@ -1154,6 +1154,7 @@ class Player final : public Creature, public Cylinder
 		const std::map<uint8_t, OpenContainer>& getOpenContainers() const {
 			return openContainers;
 		}
+
 	protected:
 		std::forward_list<Condition*> getMuteConditions() const;
 

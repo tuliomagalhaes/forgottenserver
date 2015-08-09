@@ -123,6 +123,7 @@ bool ConfigManager::load()
 	integer[MAX_MARKET_OFFERS_AT_A_TIME_PER_PLAYER] = getGlobalNumber(L, "maxMarketOffersAtATimePerPlayer", 100);
 	integer[MAX_PACKETS_PER_SECOND] = getGlobalNumber(L, "maxPacketsPerSecond", 25);
 	integer[LIVE_CAST_PORT] = getGlobalNumber(L, "liveCastPort", 7173);
+
 	loaded = true;
 
 	lua_close(L);

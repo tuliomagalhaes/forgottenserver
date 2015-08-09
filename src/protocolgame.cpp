@@ -37,9 +37,7 @@
 #include "scheduler.h"
 #include "databasetasks.h"
 
-
 extern Game g_game;
-
 extern ConfigManager g_config;
 extern Actions actions;
 extern CreatureEvents* g_creatureEvents;
@@ -292,7 +290,7 @@ bool ProtocolGame::stopLiveCast()
 		spectator->onLiveCastStop();
 	}
 	unregisterLiveCast();
-	
+
 	return true;
 }
 
@@ -348,7 +346,6 @@ void ProtocolGame::removeSpectator(ProtocolSpectator_ptr spectatorClient)
 		spectators.erase(it);
 		updateLiveCastInfo();
 	}
-
 }
 
 void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)

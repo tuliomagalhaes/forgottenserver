@@ -45,15 +45,15 @@ class ProtocolSpectator final : public ProtocolGameBase
 
 		void login(const std::string& liveCastName, const std::string& password);
 		void logout();
-		
+
 		void disconnectSpectator(const std::string& message) const;
 		void writeToOutputBuffer(const NetworkMessage& msg, bool broadcast = true) final;
-		
+
 		void syncKnownCreatureSets();
 		void syncChatChannels();
 		void syncOpenContainers();
 		void sendEmptyTileOnPlayerPos(const Tile* tile, const Position& playerPos);
-		
+
 		void release() final;
 
 		void parsePacket(NetworkMessage& msg) final;
@@ -61,7 +61,6 @@ class ProtocolSpectator final : public ProtocolGameBase
 
 		void parseSpectatorSay(NetworkMessage& msg);
 		void addDummyCreature(NetworkMessage& msg, const uint32_t& creatureID, const Position& playerPos);
-
 };
 
 #endif

@@ -35,13 +35,13 @@ class Container;
 class Tile;
 class Connection;
 class Quest;
-
 class ProtocolGame;
+class ProtocolSpectator;
 typedef std::shared_ptr<ProtocolGame> ProtocolGame_ptr;
 
 extern Game g_game;
 
-class ProtocolSpectator;
+
 
 struct TextMessage
 {

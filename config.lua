@@ -70,7 +70,6 @@ allowChangeOutfit = true
 freePremium = false
 kickIdlePlayerAfterMinutes = 15
 maxMessageBuffer = 4
-
 emoteSpells = false
 classicEquipmentSlots = false
 
