@@ -1104,9 +1104,9 @@ class Player final : public Creature, public Cylinder
 				client->sendFightModes();
 			}
 		}
-		void sendNetworkMessage(const NetworkMessage& message, bool broadCast = true) {
+		void sendNetworkMessage(const NetworkMessage& message, bool broadcast = true) {
 			if (client) {
-				client->writeToOutputBuffer(message, broadCast);
+				client->writeToOutputBuffer(message, broadcast);
 			}
 		}
 

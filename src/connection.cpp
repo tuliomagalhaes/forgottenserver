@@ -283,13 +283,15 @@ uint32_t Connection::getIP()
 	return htonl(endpoint.address().to_v4().to_ulong());
 }
 
-void Connection::dispatchBroadcastMessage(const OutputMessage_ptr& msg) {
+void Connection::dispatchBroadcastMessage(const OutputMessage_ptr& msg)
+{
 	auto msgCopy = OutputMessagePool::getOutputMessage();
 	msgCopy->append(msg);
 	io_service.dispatch(std::bind(&Connection::broadcastMessage, shared_from_this(), msgCopy));
 }
 
-void Connection::broadcastMessage(OutputMessage_ptr msg) {
+void Connection::broadcastMessage(OutputMessage_ptr msg)
+{
 	std::lock_guard<std::recursive_mutex> lockClass(connectionLock);
 	const auto client = std::dynamic_pointer_cast<ProtocolGame>(protocol);
 	if (client) {
