@@ -45,13 +45,6 @@ extern Chat* g_chat;
 
 ProtocolGame::LiveCastsMap ProtocolGame::liveCasts;
 
-ProtocolGame::ProtocolGame(Connection_ptr connection) :
-	ProtocolGameBase(connection),
-	isCaster(false)
-{
-	//
-}
-
 void ProtocolGame::release()
 {
 	//dispatcher thread
@@ -259,9 +252,10 @@ bool ProtocolGame::startLiveCast(const std::string& password /*= ""*/)
 		//DO NOT do any send operations here
 		liveCastName = player->getName();
 		liveCastPassword = password;
-		isCaster = true;
-		liveCasts.insert(std::make_pair(player, getThis()));
+		isCaster.store(true, std::memory_order_relaxed);
 	}
+
+	liveCasts.insert(std::make_pair(player, getThis()));
 
 	registerLiveCast();
 	//Send a "dummy" channel
@@ -282,7 +276,7 @@ bool ProtocolGame::stopLiveCast()
 		std::lock_guard<decltype(liveCastLock)> lock {liveCastLock};
 		//DO NOT do any send operations here
 		std::swap(this->spectators, spectators);
-		isCaster = false;
+		isCaster.store(false, std::memory_order_relaxed);
 	}
 
 	liveCasts.erase(player);

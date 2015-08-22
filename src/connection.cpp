@@ -298,7 +298,7 @@ void Connection::broadcastMessage(OutputMessage_ptr msg)
 		std::lock_guard<decltype(client->liveCastLock)> lockGuard(client->liveCastLock);
 
 		const auto& spectators = client->getLiveCastSpectators();
-		for (const auto& spectator : spectators) {
+		for (const ProtocolSpectator_ptr& spectator : spectators) {
 			auto newMsg = OutputMessagePool::getOutputMessage();
 			newMsg->append(msg);
 			spectator->send(std::move(newMsg));

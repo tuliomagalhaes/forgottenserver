@@ -41,8 +41,6 @@ typedef std::shared_ptr<ProtocolGame> ProtocolGame_ptr;
 
 extern Game g_game;
 
-
-
 struct TextMessage
 {
 	MessageClasses type;
@@ -70,7 +68,8 @@ class ProtocolGame final : public ProtocolGameBase
 		static const char* protocol_name() {
 			return "gameworld protocol";
 		}
-		explicit ProtocolGame(Connection_ptr connection);
+		explicit ProtocolGame(Connection_ptr connection):
+			ProtocolGameBase(connection) {}
 
 		void login(const std::string& name, uint32_t accnumber, OperatingSystem_t operatingSystem);
 		void logout(bool displayEffect, bool forced);
@@ -116,7 +115,7 @@ class ProtocolGame final : public ProtocolGameBase
 		}
 
 		bool isLiveCaster() const {
-			return isCaster;
+			return isCaster.load(std::memory_order_relaxed);
 		}
 
 		std::mutex liveCastLock;
@@ -379,7 +378,7 @@ class ProtocolGame final : public ProtocolGameBase
 
 		static LiveCastsMap liveCasts; ///< Stores all available casts.
 
-		bool isCaster; ///< Determines if this \ref ProtocolGame object is casting
+		std::atomic<bool> isCaster {false}; ///< Determines if this \ref ProtocolGame object is casting
 
 		/// list of spectators \warning This variable should only be accessed after locking \ref liveCastLock
 		CastSpectatorVec spectators;
