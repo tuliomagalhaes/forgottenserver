@@ -107,15 +107,10 @@ class ProtocolGame final : public ProtocolGameBase
 		*/
 		bool stopLiveCast();
 
-		/** \brief Provides access to the spectator vector.
-		 *  \returns const reference to the spectator vector
-		 */
 		const CastSpectatorVec& getLiveCastSpectators() const {
 			return spectators;
 		}
 
-		/** \brief Provides information about spectator count.
-		 */
 		size_t getSpectatorCount() const {
 			return spectators.size();
 		}
@@ -154,26 +149,18 @@ class ProtocolGame final : public ProtocolGameBase
 			return it != liveCasts.end() ? it->second : nullptr;
 		}
 
-		/** \brief Gets the live cast name/login
-		 *  \returns A const reference to a string containing the live cast name/login
-		 */
 		const std::string& getLiveCastName() const {
 			return liveCastName;
 		}
-		/** \brief Gets the live cast password
-		 *  \returns A const reference to a string containing the live cast password
-		 */
+
 		const std::string& getLiveCastPassword() const {
 			return liveCastPassword;
 		}
-		/** \brief Check if the live cast is password protected
-		 */
+
 		bool isPasswordProtected() const {
 			return !liveCastPassword.empty();
 		}
-		/** \brief Allows access to the live cast map.
-		 *  \returns A const reference to the live cast map.
-		 */
+
 		static const LiveCastsMap& getLiveCasts() {
 			return liveCasts;
 		}
@@ -187,6 +174,7 @@ class ProtocolGame final : public ProtocolGameBase
 				sendChannelMessage("Spectator", text, TALKTYPE_CHANNEL_Y, CHANNEL_CAST);
 			}
 		}
+
 		static uint8_t getMaxLiveCastCount() {
 			return std::numeric_limits<int8_t>::max();
 		}
