@@ -20,11 +20,13 @@
 #include "otpch.h"
 #include <boost/range/adaptor/reversed.hpp>
 #include "protocolgamebase.h"
+#include "configmanager.h"
 #include "game.h"
 #include "iologindata.h"
 #include "tile.h"
 #include "outputmessage.h"
 
+extern ConfigManager g_config;
 extern Game g_game;
 
 void ProtocolGameBase::onConnect()

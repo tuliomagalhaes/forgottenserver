@@ -88,7 +88,10 @@ void ProtocolLogin::getCastingStreamsList(const std::string& password, uint16_t 
 		output->addByte(0);
 		output->addString(cast.first->getName());
 	}
-	output->add<uint16_t>(0x0); //The client expects the number of premium days left.
+	output->addByte(0);
+	output->addByte(g_config.getBoolean(ConfigManager::FREE_PREMIUM));
+	output->add<uint32_t>(g_config.getBoolean(ConfigManager::FREE_PREMIUM) ? 0 : (time(nullptr)));
+
 	send(std::move(output));
 
 	disconnect();
