@@ -4,6 +4,7 @@
 	<look type="201" corpse="2916" />
 	<targetchange interval="2000" chance="10" />
 	<flags>
+		<flag rewardboss="1" />
 		<flag summonable="0" />
 		<flag attackable="1" />
 		<flag hostile="1" />
@@ -112,7 +113,7 @@
 		<item id="2514" chance="6666" /><!-- mastermind shield -->
 		<item id="2164" chance="6666" /><!-- might ring -->
 		<item id="2176" chance="6666" /><!-- orb -->
-		<item id="5808" chance="6666" /><!-- orshabaal's brain -->
+		<item id="5808" chance="6666" unique="1" /><!-- orshabaal's brain -->
 		<item id="2402" chance="6666" /><!-- silver dagger -->
 	</loot>
 </monster>

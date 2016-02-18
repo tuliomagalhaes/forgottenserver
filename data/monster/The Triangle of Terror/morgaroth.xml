@@ -4,6 +4,7 @@
 	<look type="12" head="0" body="94" legs="79" feet="79" corpse="6068" />
 	<targetchange interval="10000" chance="20" />
 	<flags>
+		<flag rewardboss="1" />
 		<flag summonable="0" />
 		<flag attackable="1" />
 		<flag hostile="1" />
@@ -76,12 +77,12 @@
 		<item id="7590" chance="50000" /><!-- great mana potion -->
 		<item id="2155" chance="33333" /><!-- green gem -->
 		<item id="2150" countmax="18" chance="33333" /><!-- small amethyst -->
-		<item id="8852" chance="33333" /><!-- devileye -->
+		<item id="8852" chance="33333" unique="1" /><!-- devileye -->
 		<item id="2214" chance="25000" /><!-- ring of healing -->
 		<item id="2146" countmax="8" chance="25000" /><!-- small sapphire -->
-		<item id="8853" chance="25000" /><!-- ironworker -->
-		<item id="8850" chance="20000" /><!-- chain bolter -->
-		<item id="8865" chance="20000" /><!-- dark lord's cape -->
+		<item id="8853" chance="25000" unique="1" /><!-- ironworker -->
+		<item id="8850" chance="20000" unique="1" /><!-- chain bolter -->
+		<item id="8865" chance="20000" unique="1" /><!-- dark lord's cape -->
 		<item id="5954" countmax="2" chance="20000" /><!-- demon horn -->
 		<item id="2472" chance="20000" /><!-- magic plate armor -->
 		<item id="2164" chance="20000" /><!-- might ring -->
@@ -93,11 +94,11 @@
 		<item id="6300" chance="16666" /><!-- death ring -->
 		<item id="7431" chance="16666" /><!-- demonbone -->
 		<item id="2387" chance="16666" /><!-- double axe -->
-		<item id="8881" chance="16666" /><!-- fireborn giant armor -->
+		<item id="8881" chance="16666" unique="1" /><!-- fireborn giant armor -->
 		<item id="2033" chance="16666" /><!-- golden mug -->
 		<item id="2178" chance="16666" /><!-- mind stone -->
-		<item id="5943" chance="16666" /><!-- Morgaroth's heart -->
-		<item id="8928" chance="16666" /><!-- obsidian truncheon -->
+		<item id="5943" chance="16666" unique="1" /><!-- Morgaroth's heart -->
+		<item id="8928" chance="16666" unique="1" /><!-- obsidian truncheon -->
 		<item id="2151" countmax="7" chance="16666" /><!-- talon -->
 		<item id="2158" chance="11111" /><!-- blue gem -->
 		<item id="2393" chance="11111" /><!-- giant sword -->
@@ -105,11 +106,11 @@
 		<item id="2177" chance="11111" /><!-- life crystal -->
 		<item id="2177" chance="11111" /><!-- life crystal -->
 		<item id="7493" chance="11111" /><!-- orb -->
-		<item id="8851" chance="11111" /><!-- royal crossbow -->
+		<item id="8851" chance="11111" unique="1" /><!-- royal crossbow -->
 		<item id="2165" chance="11111" /><!-- stealth ring -->
 		<item id="2645" chance="11111" /><!-- steel boots -->
 		<item id="2174" chance="11111" /><!-- strange symbol -->
-		<item id="2112" chance="11111" /><!-- teddy bear -->
+		<item id="2112" chance="11111" unique="1" /><!-- teddy bear -->
 		<item id="2143" countmax="13" chance="11111" /><!-- white pearl -->
 		<item id="2124" chance="5882" /><!-- crystal ring -->
 		<item id="8867" chance="5882" /><!-- dragon robe -->
