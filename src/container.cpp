@@ -306,7 +306,7 @@ ReturnValue Container::queryAdd(int32_t index, const Thing& thing, uint32_t coun
 	}
 
 	const Cylinder* cylinder = getParent();
-	if (!hasBitSet(FLAG_NOLIMIT, flags)) {
+	if (!hasBitSet(FLAG_NOLIMIT, flags) || !hasPagination()) {
 		while (cylinder) {
 			if (cylinder == &thing) {
 				return RETURNVALUE_THISISIMPOSSIBLE;
@@ -349,7 +349,7 @@ ReturnValue Container::queryMaxCount(int32_t index, const Thing& thing, uint32_t
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	if (hasBitSet(FLAG_NOLIMIT, flags)) {
+	if (hasBitSet(FLAG_NOLIMIT, flags) || hasPagination()) {
 		maxQueryCount = std::max<uint32_t>(1, count);
 		return RETURNVALUE_NOERROR;
 	}
