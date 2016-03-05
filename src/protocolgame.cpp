@@ -1444,7 +1444,6 @@ void ProtocolGame::sendContainer(uint8_t cid, const Container* container, bool h
 	msg.add<uint16_t>(firstIndex);
 
 	uint32_t maxItemsToSend;
-
 	if (container->hasPagination() && firstIndex > 0) {
 		maxItemsToSend = std::min<uint32_t>(container->capacity(), containerSize - firstIndex);
 	} else {
@@ -2379,7 +2378,6 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 		if (isLogin) {
 			sendMagicEffect(pos, CONST_ME_TELEPORT);
 		}
-
 		return;
 	}
 
