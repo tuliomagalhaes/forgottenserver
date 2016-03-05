@@ -896,8 +896,8 @@ DepotChest* Player::createDepots()
 	DepotChest* depotChests = new DepotChest(ITEM_DEPOT);
 	depotChests->incrementReferenceCounter();
 	depotChests->setMaxDepotItems(getMaxDepotItems());
-	for (uint32_t index = 0; index < 17; ++index) {
-		depotChests->internalAddThing(getDepotChest(16 - index, true));
+	for (uint32_t index = 1; index <= 17; ++index) {
+		depotChests->internalAddThing(getDepotChest(18 - index, true));
 	}
 	return depotChests;
 }
@@ -913,7 +913,7 @@ DepotChest* Player::getDepotChest(uint32_t depotId, bool autoCreate)
 		return nullptr;
 	}
 
-	DepotChest* depotChest = new DepotChest(25453 + depotId, true);
+	DepotChest* depotChest = new DepotChest(25452 + depotId, true);
 	depotChest->incrementReferenceCounter();
 	depotChests[depotId] = depotChest;
 	return depotChest;
